@@ -2,6 +2,8 @@ import { useAppStore } from '@/store/useAppStore';
 import { GitCompare, Play, ArrowRightLeft, TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import StatsOverview from '../dashboard/StatsOverview';
 import IssueList from '../issues/IssueList';
+import ColorBlindPreview from '../colorblind/ColorBlindPreview';
+import ExportPanel from '../export/ExportPanel';
 import type { ScanReport } from '@/types';
 
 const SECTION_STYLE = 'rounded-2xl border border-dark-800 bg-dark-900/30 p-4';
@@ -115,6 +117,11 @@ export default function CompareView() {
             <IssueList />
           </div>
         </div>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <ColorBlindPreview />
+        <ExportPanel />
       </div>
     </section>
   );

@@ -1,9 +1,18 @@
 import { useAppStore } from '@/store/useAppStore';
 import type { Severity } from '@/types';
 import { ISSUE_CATEGORIES } from '@/data/mockData';
-import * as Icons from 'lucide-react';
-import { Filter, X } from 'lucide-react';
+import { Filter, X, Image, FormInput, Palette, Focus, Code2, Heading, FileText, Circle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  Image,
+  FormInput,
+  Palette,
+  Focus,
+  Code2,
+  Heading,
+  FileText,
+};
 
 const SEVERITY_OPTIONS: { key: Severity; label: string }[] = [
   { key: 'serious', label: '严重' },
@@ -75,7 +84,7 @@ export default function FilterBar() {
           <div className="flex flex-wrap gap-2">
             {ISSUE_CATEGORIES.map((cat) => {
               const active = activeFilters.categories.includes(cat.key);
-              const Icon = (Icons as unknown as Record<string, LucideIcon>)[cat.icon] || Icons.Circle;
+              const Icon = ICON_MAP[cat.icon] ?? Circle;
               return (
                 <button
                   key={cat.key}

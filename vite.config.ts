@@ -14,4 +14,15 @@ export default defineConfig({
     strictPort: true,
     host: true,
   },
+  build: {
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'lib-axe-core': ['axe-core'],
+          'lib-jspdf': ['jspdf'],
+        },
+      },
+    },
+  },
 })

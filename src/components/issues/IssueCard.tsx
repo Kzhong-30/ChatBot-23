@@ -1,13 +1,16 @@
-import { ChevronRight, Code2, Copy, CheckCheck } from 'lucide-react';
+import { ChevronRight, Code2, Copy, CheckCheck, ExternalLink } from 'lucide-react';
 import type { A11yIssue } from '@/types';
 import SeverityBadge from './SeverityBadge';
 import { useState } from 'react';
 import { ISSUE_CATEGORIES } from '@/data/mockData';
+import { useAppStore } from '@/store/useAppStore';
 
 export default function IssueCard({ issue, index }: { issue: A11yIssue; index: number }) {
   const [open, setOpen] = useState(index === 0);
   const [copied, setCopied] = useState(false);
+  const { selectIssue, selectedIssueId } = useAppStore();
   const category = ISSUE_CATEGORIES.find((c) => c.key === issue.category);
+  const isSelected = selectedIssueId === issue.id;
 
   const copySelector = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -19,14 +22,22 @@ export default function IssueCard({ issue, index }: { issue: A11yIssue; index: n
   return (
     <div
       className={`group animate-fade-in overflow-hidden rounded-2xl border bg-dark-900/70 transition-all ${
-        open ? 'border-dark-600 shadow-xl shadow-black/20' : 'border-dark-800 hover:border-dark-700'
-      }`}
+        isSelected ? 'border-primary-500 ring-1 ring-primary-500/40' : ''
+      } ${open ? 'border-dark-600 shadow-xl shadow-black/20' : 'border-dark-800 hover:border-dark-700'}`}
       style={{ animationDelay: `${index * 40}ms` }}
     >
-      <button
+      <div
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start gap-4 p-5 text-left"
+        className="flex w-full cursor-pointer items-start gap-4 p-5 text-left"
         aria-expanded={open}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setOpen((v) => !v);
+          }
+        }}
       >
         <div
           className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black ${
@@ -54,12 +65,29 @@ export default function IssueCard({ issue, index }: { issue: A11yIssue; index: n
           <h3 className="mb-1 font-semibold text-white">{issue.title}</h3>
           <p className="line-clamp-2 text-xs text-dark-400">{issue.description}</p>
         </div>
-        <ChevronRight
-          className={`mt-2 h-5 w-5 shrink-0 text-dark-500 transition-transform duration-300 ${
-            open ? 'rotate-90 text-primary-400' : ''
-          }`}
-        />
-      </button>
+        <div className="mt-1 flex shrink-0 items-center gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              selectIssue(issue.id);
+            }}
+            aria-label="查看详情"
+            title="在右侧抽屉中查看详情"
+            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition ${
+              isSelected
+                ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/30'
+                : 'text-dark-500 hover:bg-dark-800 hover:text-primary-400'
+            }`}
+          >
+            <ExternalLink className="h-4 w-4" />
+          </button>
+          <ChevronRight
+            className={`h-5 w-5 text-dark-500 transition-transform duration-300 ${
+              open ? 'rotate-90 text-primary-400' : ''
+            }`}
+          />
+        </div>
+      </div>
 
       {open && (
         <div className="animate-fade-in border-t border-dark-800 bg-dark-950/50 p-5">

@@ -55,6 +55,14 @@ export interface ScanReport {
   };
   issues: A11yIssue[];
   pageTitle?: string;
+  engineMeta?: {
+    axeVersion: string;
+    engine: 'axe-core-mock';
+    ruleset: string;
+    rawViolations: number;
+    rawPasses: number;
+    rawIncomplete: number;
+  };
 }
 
 export interface ActiveFilters {

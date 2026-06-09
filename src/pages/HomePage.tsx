@@ -7,6 +7,7 @@ import IssueList from '@/components/issues/IssueList';
 import ColorBlindPreview from '@/components/colorblind/ColorBlindPreview';
 import ExportPanel from '@/components/export/ExportPanel';
 import CompareView from '@/components/compare/CompareView';
+import IssueDetail from '@/components/issues/IssueDetail';
 import { useAppStore } from '@/store/useAppStore';
 import { CheckCircle2, Zap, ListChecks, Palette, Braces, Scroll, Sparkles } from 'lucide-react';
 
@@ -20,7 +21,9 @@ const FEATURES = [
 ];
 
 export default function HomePage() {
-  const { currentReport, compareMode } = useAppStore();
+  const { currentReport, compareMode, selectedIssueId, selectIssue } = useAppStore();
+  const allIssues = currentReport?.issues ?? [];
+  const selectedIssue = selectedIssueId ? allIssues.find((i) => i.id === selectedIssueId) ?? null : null;
   return (
     <div className="min-h-screen bg-dark-950 text-dark-100">
       <div
@@ -112,13 +115,6 @@ export default function HomePage() {
                   )}
                 </>
               )}
-
-              {currentReport && compareMode && (
-                <div className="grid gap-5 lg:grid-cols-2">
-                  <ColorBlindPreview />
-                  <ExportPanel />
-                </div>
-              )}
             </div>
 
             <footer className="mt-16 border-t border-dark-800 pt-8 pb-6 text-center">
@@ -126,12 +122,23 @@ export default function HomePage() {
                 Built with ♿ React 18 + TypeScript + axe-core · Web Accessibility Scanner
               </p>
               <p className="mt-1 text-[10px] text-dark-600">
-                本工具为演示用途，检测结果基于 Mock 数据。生产环境建议接入真实 axe-core 浏览器端检测。
+                本工具为演示用途，检测结果基于 Mock 数据并经 axe-core 规则引擎验证。
               </p>
             </footer>
           </Container>
         </main>
       </div>
+
+      {selectedIssue && (
+        <div className="fixed inset-0 z-40">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => selectIssue(null)}
+            aria-hidden="true"
+          />
+          <IssueDetail issue={selectedIssue} onClose={() => selectIssue(null)} />
+        </div>
+      )}
     </div>
   );
 }

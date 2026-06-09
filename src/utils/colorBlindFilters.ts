@@ -1,11 +1,14 @@
 import type { ColorBlindType } from '@/types';
 
+export const ACHROMATOPSIA_MATRIX =
+  '0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0 0 0 1 0';
+
 export const colorBlindFilterMap: Record<ColorBlindType, string> = {
   normal: 'none',
   protanopia: 'url("#protanopia-filter")',
   deuteranopia: 'url("#deuteranopia-filter")',
   tritanopia: 'url("#tritanopia-filter")',
-  achromatopsia: 'grayscale(100%)',
+  achromatopsia: 'url("#achromatopsia-filter")',
 };
 
 export const colorBlindInfo: Record<ColorBlindType, { label: string; desc: string; percent: string }> = {

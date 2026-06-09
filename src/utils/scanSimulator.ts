@@ -1,5 +1,6 @@
 import { buildMockReport } from '@/data/mockData';
 import type { ScanReport } from '@/types';
+import { runAxeOnProbe, type AxeRunSummary } from './axeScanner';
 
 export async function simulateScan(
   url: string,
@@ -7,20 +8,44 @@ export async function simulateScan(
   improved = false
 ): Promise<ScanReport> {
   const stages = [
-    { label: '解析 DOM 结构', progress: 20 },
-    { label: '检查图片替代文本', progress: 40 },
-    { label: '扫描表单与 ARIA', progress: 60 },
-    { label: '分析颜色对比度', progress: 78 },
-    { label: '验证键盘与焦点', progress: 90 },
-    { label: '生成报告', progress: 100 },
+    { label: '解析 DOM 结构', progress: 18 },
+    { label: '检查图片替代文本', progress: 34 },
+    { label: '扫描表单与 ARIA 属性', progress: 50 },
+    { label: '启动 axe-core 规则引擎', progress: 62, hook: 'axe' as const },
+    { label: '分析颜色对比度与焦点', progress: 80 },
+    { label: '应用 Mock 覆盖层', progress: 92 },
+    { label: '生成检测报告', progress: 100 },
   ];
 
+  let axeSummary: AxeRunSummary | null = null;
+
   for (const stage of stages) {
-    await new Promise((r) => setTimeout(r, 280 + Math.random() * 200));
+    await new Promise((r) => setTimeout(r, 260 + Math.random() * 220));
+    if (stage.hook === 'axe') {
+      try {
+        axeSummary = await Promise.race<Promise<AxeRunSummary | null>>([
+          runAxeOnProbe(url),
+          new Promise<null>((r) => setTimeout(() => r(null), 2500)),
+        ]);
+      } catch {
+        axeSummary = null;
+      }
+    }
     onProgress(stage.progress);
   }
 
-  return buildMockReport(url, improved);
+  const report = buildMockReport(url, improved);
+  if (axeSummary) {
+    report.engineMeta = {
+      axeVersion: axeSummary.version,
+      engine: 'axe-core-mock',
+      ruleset: axeSummary.ruleset,
+      rawViolations: axeSummary.violations,
+      rawPasses: axeSummary.passes,
+      rawIncomplete: axeSummary.incomplete,
+    };
+  }
+  return report;
 }
 
 export function groupIssuesByCategory(report: ScanReport) {

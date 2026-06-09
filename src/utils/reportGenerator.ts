@@ -128,75 +128,241 @@ export function downloadHtml(report: ScanReport, reportB?: ScanReport) {
 }
 
 export async function downloadPdf(report: ScanReport) {
-  const html = generateHtmlReport(report);
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   const marginX = 40;
+  const contentWidth = pageWidth - 2 * marginX;
   let y = 50;
+
+  const ensureSpace = (needed: number) => {
+    if (y + needed > pageHeight - 50) {
+      pdf.addPage();
+      y = 50;
+    }
+  };
+
+  const drawRoundedRect = (
+    x: number,
+    yp: number,
+    w: number,
+    h: number,
+    r: number,
+    fill: [number, number, number]
+  ) => {
+    pdf.setFillColor(...fill);
+    pdf.roundedRect(x, yp, w, h, r, r, 'F');
+  };
 
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(20);
   pdf.setTextColor(13, 148, 136);
-  pdf.text('Accessibility Audit Report', marginX, y);
-  y += 30;
-
-  pdf.setFontSize(11);
+  pdf.text('Web Accessibility Audit Report', marginX, y);
+  y += 14;
+  pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(100, 116, 139);
   pdf.text(`URL: ${report.url}`, marginX, y);
-  y += 16;
-  pdf.text(`Time: ${report.scanTime} · Duration: ${(report.duration / 1000).toFixed(2)}s`, marginX, y);
-  y += 28;
+  y += 14;
+  pdf.text(
+    `Time: ${report.scanTime}  ·  Duration: ${(report.duration / 1000).toFixed(2)}s`,
+    marginX,
+    y
+  );
+  if (report.engineMeta) {
+    y += 14;
+    pdf.text(
+      `Engine: axe-core ${report.engineMeta.axeVersion} (ruleset: ${report.engineMeta.ruleset})`,
+      marginX,
+      y
+    );
+    y += 14;
+    pdf.text(
+      `Axe raw: ${report.engineMeta.rawViolations} violations, ${report.engineMeta.rawPasses} passes, ${report.engineMeta.rawIncomplete} incomplete`,
+      marginX,
+      y
+    );
+  }
+  y += 20;
 
-  const drawStatBlock = (label: string, value: number, color: [number, number, number], offset: number) => {
-    pdf.setFillColor(30, 41, 59);
-    pdf.roundedRect(marginX + offset * 130, y, 120, 70, 6, 6, 'F');
+  const drawStatBlock = (
+    label: string,
+    value: number | string,
+    color: [number, number, number],
+    offset: number,
+    width = 118
+  ) => {
+    drawRoundedRect(marginX + offset * (width + 12), y, width, 72, 8, [30, 41, 59]);
     pdf.setFontSize(24);
+    pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(...color);
-    pdf.text(String(value), marginX + offset * 130 + 16, y + 34);
+    pdf.text(String(value), marginX + offset * (width + 12) + 16, y + 34);
     pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(148, 163, 184);
-    pdf.text(label, marginX + offset * 130 + 16, y + 54);
+    pdf.text(label, marginX + offset * (width + 12) + 16, y + 54);
   };
 
   drawStatBlock('Score', report.score, [52, 211, 153], 0);
   drawStatBlock('Serious', report.stats.serious, [225, 29, 72], 1);
   drawStatBlock('Warning', report.stats.warning, [245, 158, 11], 2);
   drawStatBlock('Tip', report.stats.tip, [59, 130, 246], 3);
-  y += 100;
+  y += 92;
 
-  pdf.setFontSize(14);
+  const severityRgb: Record<string, [number, number, number]> = {
+    serious: [225, 29, 72],
+    warning: [245, 158, 11],
+    tip: [59, 130, 246],
+  };
+  const severityBg: Record<string, [number, number, number]> = {
+    serious: [76, 5, 25],
+    warning: [69, 26, 3],
+    tip: [30, 58, 138],
+  };
+  const severityLabel: Record<string, string> = {
+    serious: 'SERIOUS',
+    warning: 'WARNING',
+    tip: 'TIP',
+  };
+
+  pdf.setFontSize(13);
+  pdf.setFont('helvetica', 'bold');
   pdf.setTextColor(100, 116, 139);
-  pdf.text(`Issues (${report.stats.total} items)`, marginX, y);
-  y += 22;
+  pdf.text(`Detected Issues (${report.stats.total} items)`, marginX, y);
+  y += 8;
+  pdf.setDrawColor(51, 65, 85);
+  pdf.setLineWidth(0.5);
+  pdf.line(marginX, y, pageWidth - marginX, y);
+  y += 18;
 
-  for (const issue of report.issues) {
-    if (y > pageHeight - 100) {
-      pdf.addPage();
-      y = 50;
-    }
-    const severityColor: Record<string, [number, number, number]> = {
-      serious: [225, 29, 72],
-      warning: [245, 158, 11],
-      tip: [59, 130, 246],
-    };
-    pdf.setFillColor(...severityColor[issue.severity]);
-    pdf.roundedRect(marginX, y, 8, 66, 3, 3, 'F');
-    pdf.setFont('helvetica', 'bold');
+  for (let idx = 0; idx < report.issues.length; idx++) {
+    const issue = report.issues[idx];
+    const sevColor = severityRgb[issue.severity] ?? severityRgb.tip;
+    const sevBg = severityBg[issue.severity] ?? severityBg.tip;
+    const label = severityLabel[issue.severity] ?? 'TIP';
+
+    ensureSpace(260);
+
+    const blockStartY = y;
+    pdf.setFillColor(...sevColor);
+    pdf.roundedRect(marginX, blockStartY, 10, 22, 4, 4, 'F');
+    pdf.roundedRect(marginX, blockStartY, 10, 22, 4, 4, 'F');
+
+    const issueTitleMax = contentWidth - 110;
     pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(226, 232, 240);
-    pdf.text(issue.title.substring(0, 60), marginX + 16, y + 14);
-    y += 24;
+    const titleLines = pdf.splitTextToSize(
+      `#${idx + 1}  ${issue.title.substring(0, 120)}`,
+      issueTitleMax
+    );
+    pdf.text(titleLines, marginX + 22, blockStartY + 16);
+
+    pdf.setFillColor(...sevBg);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(...sevColor);
+    const badgeX = pageWidth - marginX - 70;
+    pdf.roundedRect(badgeX, blockStartY + 2, 70, 18, 6, 6, 'F');
+    pdf.text(label, badgeX + 10, blockStartY + 14);
+    y = blockStartY + 32;
+
+    pdf.setFillColor(30, 41, 59);
+    pdf.roundedRect(marginX, y, contentWidth, 10, 4, 4, 'F');
+    const blockInnerStartY = y + 6;
+    let by = blockInnerStartY + 10;
+
+    pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(10);
     pdf.setTextColor(148, 163, 184);
-    const descLines = pdf.splitTextToSize(issue.description, pageWidth - 2 * marginX - 16);
-    pdf.text(descLines, marginX + 16, y);
-    y += descLines.length * 14 + 10;
+    pdf.text(`Selector: ${issue.element.selector}`, marginX + 12, by);
+    by += 14;
+
+    pdf.setFontSize(10);
+    pdf.setTextColor(203, 213, 225);
+    const descLines = pdf.splitTextToSize(issue.description, contentWidth - 24);
+    pdf.text(descLines, marginX + 12, by);
+    by += descLines.length * 13 + 10;
+
+    ensureSpace(180);
+
+    pdf.setFontSize(8.5);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(...sevColor);
+    pdf.text('WCAG REFERENCES:', marginX + 12, by);
+    by += 12;
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(148, 163, 184);
+    const wcagText = issue.wcagRefs
+      .map((r) => `WCAG ${r.code} (Level ${r.level}) - ${r.name}`)
+      .join('    ');
+    const wcagLines = pdf.splitTextToSize(wcagText, contentWidth - 24);
+    pdf.text(wcagLines, marginX + 12, by);
+    by += wcagLines.length * 12 + 10;
+
+    pdf.setFontSize(8.5);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(52, 211, 153);
+    pdf.text('FIX STEPS:', marginX + 12, by);
+    by += 12;
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(203, 213, 225);
+    issue.fixSuggestion.steps.forEach((step, i) => {
+      ensureSpace(24);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(13, 148, 136);
+      pdf.text(`${i + 1}.`, marginX + 12, by);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(203, 213, 225);
+      const stepLines = pdf.splitTextToSize(step, contentWidth - 42);
+      pdf.text(stepLines, marginX + 28, by);
+      by += Math.max(12, stepLines.length * 12) + 4;
+    });
+    by += 8;
+
+    ensureSpace(150);
+
+    if (issue.fixSuggestion.codeBefore) {
+      pdf.setFontSize(8.5);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(225, 29, 72);
+      pdf.text('CODE BEFORE:', marginX + 12, by);
+      by += 12;
+      pdf.setFont('courier', 'normal');
+      pdf.setFontSize(8);
+      pdf.setTextColor(250, 204, 21);
+      pdf.setFillColor(15, 23, 42);
+      const beforeLines = pdf.splitTextToSize(issue.fixSuggestion.codeBefore, contentWidth - 24);
+      const codeBlockH1 = Math.max(28, beforeLines.length * 11 + 16);
+      pdf.roundedRect(marginX + 12, by - 6, contentWidth - 24, codeBlockH1, 4, 4, 'F');
+      pdf.text(beforeLines, marginX + 20, by + 5);
+      by += codeBlockH1 + 8;
+    }
+
+    ensureSpace(150);
+
+    if (issue.fixSuggestion.codeAfter) {
+      pdf.setFontSize(8.5);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(52, 211, 153);
+      pdf.text('CODE AFTER:', marginX + 12, by);
+      by += 12;
+      pdf.setFont('courier', 'normal');
+      pdf.setFontSize(8);
+      pdf.setTextColor(167, 243, 208);
+      pdf.setFillColor(15, 23, 42);
+      const afterLines = pdf.splitTextToSize(issue.fixSuggestion.codeAfter, contentWidth - 24);
+      const codeBlockH2 = Math.max(28, afterLines.length * 11 + 16);
+      pdf.roundedRect(marginX + 12, by - 6, contentWidth - 24, codeBlockH2, 4, 4, 'F');
+      pdf.text(afterLines, marginX + 20, by + 5);
+      by += codeBlockH2 + 8;
+    }
+
+    by += 14;
+    y = by;
   }
 
   pdf.save(`a11y-report-${report.id}.pdf`);
-  void blob;
 }
