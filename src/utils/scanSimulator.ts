@@ -3,39 +3,55 @@ import type { ScanReport, A11yIssue } from '@/types';
 import { runAxeOnProbe, type AxeRunSummary, mapAxeViolationsToIssues } from './axeScanner';
 
 function mergeAxeIssuesIntoReport(report: ScanReport, axeIssues: A11yIssue[]): ScanReport {
-  if (axeIssues.length === 0) return report;
-  const seenCats = new Map<string, number>();
-  for (const ai of axeIssues) {
-    seenCats.set(ai.category, (seenCats.get(ai.category) ?? 0) + 1);
-  }
-  const merged: A11yIssue[] = [];
-  const usedTypes = new Set<string>();
-  for (const ai of axeIssues) {
-    usedTypes.add(ai.type);
-    merged.push(ai);
-    if (merged.length >= 12) break;
-  }
-  if (merged.length < 12) {
-    for (const mi of report.issues) {
-      if (!usedTypes.has(mi.type)) {
-        merged.push(mi);
-        if (merged.length >= 12) break;
+  try {
+    if (!Array.isArray(axeIssues) || axeIssues.length === 0) return report;
+    const seenCats = new Map<string, number>();
+    for (const ai of axeIssues) {
+      if (!ai || !ai.category) continue;
+      seenCats.set(ai.category, (seenCats.get(ai.category) ?? 0) + 1);
+    }
+    const merged: A11yIssue[] = [];
+    const usedTypes = new Set<string>();
+    for (const ai of axeIssues) {
+      if (!ai || !ai.type) continue;
+      usedTypes.add(ai.type);
+      merged.push(ai);
+      if (merged.length >= 12) break;
+    }
+    if (merged.length < 12) {
+      for (const mi of report.issues) {
+        if (!mi || !mi.type) continue;
+        if (!usedTypes.has(mi.type)) {
+          merged.push(mi);
+          if (merged.length >= 12) break;
+        }
       }
     }
+    const stats = { serious: 0, warning: 0, tip: 0 };
+    for (const it of merged) {
+      if (it.severity === 'serious' || it.severity === 'warning' || it.severity === 'tip') {
+        stats[it.severity] = (stats[it.severity] ?? 0) + 1;
+      } else {
+        stats.warning += 1;
+      }
+    }
+    report.issues = merged;
+    const prevTotal = report.stats.total ?? 0;
+    report.stats = {
+      ...report.stats,
+      ...stats,
+      total: merged.length,
+      passed: Math.max(0, report.stats.passed - Math.max(0, merged.length - prevTotal)),
+    };
+    const total = stats.serious + stats.warning + stats.tip;
+    const weighted = stats.serious * 5 + stats.warning * 2 + stats.tip * 1;
+    report.score = total === 0 ? 100 : Math.max(30, Math.round(100 - (weighted / (total * 5)) * 65));
+    if (Number.isNaN(report.score)) report.score = 68;
+    return report;
+  } catch (err) {
+    console.error('[mergeAxeIssuesIntoReport] merge failed, fallback to mock', err);
+    return report;
   }
-  const stats = { serious: 0, warning: 0, tip: 0 };
-  for (const it of merged) stats[it.severity] += 1;
-  report.issues = merged;
-  report.stats = {
-    ...report.stats,
-    ...stats,
-    total: merged.length,
-    passed: Math.max(0, report.stats.passed - (merged.length - report.stats.total)),
-  };
-  const total = stats.serious + stats.warning + stats.tip;
-  const weighted = stats.serious * 5 + stats.warning * 2 + stats.tip * 1;
-  report.score = total === 0 ? 100 : Math.max(30, Math.round(100 - (weighted / (total * 5)) * 65));
-  return report;
 }
 
 export async function simulateScan(
@@ -81,7 +97,11 @@ export async function simulateScan(
       rawIncomplete: axeSummary.incomplete,
     };
     const axeIssues = mapAxeViolationsToIssues(axeSummary.rawViolationsData ?? []);
-    mergeAxeIssuesIntoReport(report, axeIssues);
+    try {
+      mergeAxeIssuesIntoReport(report, axeIssues);
+    } catch (err) {
+      console.error('[simulateScan] merge axe issues failed, using mock only', err);
+    }
   }
   return report;
 }

@@ -26,20 +26,34 @@ export default function FilterBar() {
   const hasFilters = activeFilters.severity.length > 0 || activeFilters.categories.length > 0;
 
   useEffect(() => {
+    const iconKeys = Object.keys(ICON_MAP);
     const rows = ISSUE_CATEGORIES.map((cat) => {
       const iconInMap = Object.prototype.hasOwnProperty.call(ICON_MAP, cat.icon);
+      const strictMatch = iconKeys.some((k) => k === cat.icon);
+      const caseInsensitiveMatch = iconKeys.find((k) => k.toLowerCase() === cat.icon.toLowerCase());
       const resolved = ICON_MAP[cat.icon] ?? Circle;
       return {
         category: cat.key,
         categoryLabel: cat.label,
         cat_icon_name: cat.icon,
         ICON_MAP_key_exists: iconInMap,
+        strict_equality_match: strictMatch,
+        case_mismatch_but_fuzzy: !strictMatch && Boolean(caseInsensitiveMatch),
+        fuzzy_match_key: caseInsensitiveMatch ?? null,
         resolved_icon_name: resolved.displayName ?? resolved.name ?? 'unknown',
         will_fallback_to_Circle: !iconInMap,
       };
     });
     console.table(rows);
-    console.log('[FilterBar] ICON_MAP 注册 keys:', Object.keys(ICON_MAP));
+    console.log('[FilterBar] ICON_MAP 注册 keys:', iconKeys);
+    for (const cat of ISSUE_CATEGORIES) {
+      const isExact = iconKeys.includes(cat.icon);
+      if (!isExact) {
+        console.warn(
+          `[FilterBar] ⚠ 分类 ${cat.key} 的 icon="${cat.icon}" 与 ICON_MAP key 不全等匹配，请修正大小写`,
+        );
+      }
+    }
   }, []);
 
   if (!currentReport) return null;

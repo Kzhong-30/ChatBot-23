@@ -71,7 +71,7 @@ export default function IssueCard({ issue, index }: { issue: A11yIssue; index: n
               e.stopPropagation();
               selectIssue(issue.id);
             }}
-            aria-label="查看详情"
+            aria-label="查看完整详情"
             title="在右侧抽屉中查看完整详情"
             className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition ${
               isSelected
