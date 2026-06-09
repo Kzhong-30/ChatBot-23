@@ -3,6 +3,7 @@ import type { Severity } from '@/types';
 import { ISSUE_CATEGORIES } from '@/data/mockData';
 import { Filter, X, Image, FormInput, Palette, Focus, Code2, Heading, FileText, Circle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useEffect } from 'react';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   Image,
@@ -23,6 +24,23 @@ const SEVERITY_OPTIONS: { key: Severity; label: string }[] = [
 export default function FilterBar() {
   const { activeFilters, toggleSeverityFilter, toggleCategoryFilter, clearFilters, currentReport } = useAppStore();
   const hasFilters = activeFilters.severity.length > 0 || activeFilters.categories.length > 0;
+
+  useEffect(() => {
+    const rows = ISSUE_CATEGORIES.map((cat) => {
+      const iconInMap = Object.prototype.hasOwnProperty.call(ICON_MAP, cat.icon);
+      const resolved = ICON_MAP[cat.icon] ?? Circle;
+      return {
+        category: cat.key,
+        categoryLabel: cat.label,
+        cat_icon_name: cat.icon,
+        ICON_MAP_key_exists: iconInMap,
+        resolved_icon_name: resolved.displayName ?? resolved.name ?? 'unknown',
+        will_fallback_to_Circle: !iconInMap,
+      };
+    });
+    console.table(rows);
+    console.log('[FilterBar] ICON_MAP 注册 keys:', Object.keys(ICON_MAP));
+  }, []);
 
   if (!currentReport) return null;
 

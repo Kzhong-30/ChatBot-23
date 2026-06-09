@@ -20,7 +20,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           'lib-axe-core': ['axe-core'],
-          'lib-jspdf': ['jspdf'],
         },
       },
     },

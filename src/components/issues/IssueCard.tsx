@@ -65,21 +65,22 @@ export default function IssueCard({ issue, index }: { issue: A11yIssue; index: n
           <h3 className="mb-1 font-semibold text-white">{issue.title}</h3>
           <p className="line-clamp-2 text-xs text-dark-400">{issue.description}</p>
         </div>
-        <div className="mt-1 flex shrink-0 items-center gap-1">
+        <div className="mt-1 flex shrink-0 items-center gap-2">
           <button
             onClick={(e) => {
               e.stopPropagation();
               selectIssue(issue.id);
             }}
             aria-label="查看详情"
-            title="在右侧抽屉中查看详情"
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition ${
+            title="在右侧抽屉中查看完整详情"
+            className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition ${
               isSelected
                 ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/30'
-                : 'text-dark-500 hover:bg-dark-800 hover:text-primary-400'
+                : 'text-dark-300 hover:bg-dark-800 hover:text-primary-400'
             }`}
           >
-            <ExternalLink className="h-4 w-4" />
+            <ExternalLink className="h-3.5 w-3.5" />
+            <span>查看完整详情</span>
           </button>
           <ChevronRight
             className={`h-5 w-5 text-dark-500 transition-transform duration-300 ${
@@ -211,6 +212,22 @@ export default function IssueCard({ issue, index }: { issue: A11yIssue; index: n
                   </ul>
                 </div>
               )}
+              <div className="mt-6 border-t border-dark-800 pt-4">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectIssue(issue.id);
+                  }}
+                  className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium transition ${
+                    isSelected
+                      ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/30'
+                      : 'bg-primary-900/30 text-primary-300 hover:bg-primary-900/50 hover:text-primary-200'
+                  }`}
+                >
+                  <span>在右侧抽屉查看完整详情（含修复代码 Diff）</span>
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

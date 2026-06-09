@@ -1,6 +1,42 @@
 import { buildMockReport } from '@/data/mockData';
-import type { ScanReport } from '@/types';
-import { runAxeOnProbe, type AxeRunSummary } from './axeScanner';
+import type { ScanReport, A11yIssue } from '@/types';
+import { runAxeOnProbe, type AxeRunSummary, mapAxeViolationsToIssues } from './axeScanner';
+
+function mergeAxeIssuesIntoReport(report: ScanReport, axeIssues: A11yIssue[]): ScanReport {
+  if (axeIssues.length === 0) return report;
+  const seenCats = new Map<string, number>();
+  for (const ai of axeIssues) {
+    seenCats.set(ai.category, (seenCats.get(ai.category) ?? 0) + 1);
+  }
+  const merged: A11yIssue[] = [];
+  const usedTypes = new Set<string>();
+  for (const ai of axeIssues) {
+    usedTypes.add(ai.type);
+    merged.push(ai);
+    if (merged.length >= 12) break;
+  }
+  if (merged.length < 12) {
+    for (const mi of report.issues) {
+      if (!usedTypes.has(mi.type)) {
+        merged.push(mi);
+        if (merged.length >= 12) break;
+      }
+    }
+  }
+  const stats = { serious: 0, warning: 0, tip: 0 };
+  for (const it of merged) stats[it.severity] += 1;
+  report.issues = merged;
+  report.stats = {
+    ...report.stats,
+    ...stats,
+    total: merged.length,
+    passed: Math.max(0, report.stats.passed - (merged.length - report.stats.total)),
+  };
+  const total = stats.serious + stats.warning + stats.tip;
+  const weighted = stats.serious * 5 + stats.warning * 2 + stats.tip * 1;
+  report.score = total === 0 ? 100 : Math.max(30, Math.round(100 - (weighted / (total * 5)) * 65));
+  return report;
+}
 
 export async function simulateScan(
   url: string,
@@ -44,6 +80,8 @@ export async function simulateScan(
       rawPasses: axeSummary.passes,
       rawIncomplete: axeSummary.incomplete,
     };
+    const axeIssues = mapAxeViolationsToIssues(axeSummary.rawViolationsData ?? []);
+    mergeAxeIssuesIntoReport(report, axeIssues);
   }
   return report;
 }

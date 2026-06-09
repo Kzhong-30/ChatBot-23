@@ -1,4 +1,22 @@
 import axe from 'axe-core';
+import type { A11yIssue, Severity, WcagRef, ElementLocator, FixSuggestion } from '@/types';
+
+export interface AxeViolationNode {
+  target: string[];
+  html: string;
+  xpath?: string[];
+  failureSummary?: string;
+}
+
+export interface AxeViolation {
+  id: string;
+  impact: 'minor' | 'moderate' | 'serious' | 'critical' | null;
+  help: string;
+  helpUrl: string;
+  description: string;
+  tags: string[];
+  nodes: AxeViolationNode[];
+}
 
 export interface AxeRunSummary {
   version: string;
@@ -7,6 +25,7 @@ export interface AxeRunSummary {
   passes: number;
   incomplete: number;
   violationTypes: string[];
+  rawViolationsData: AxeViolation[];
 }
 
 export function buildProbeHtml(url: string): string {
@@ -141,6 +160,7 @@ export async function runAxeOnProbe(url: string): Promise<AxeRunSummary> {
           violationTypes: results.violations
             .slice(0, 12)
             .map((v) => `${v.id}[${v.nodes.length}]`),
+          rawViolationsData: (results.violations as unknown as AxeViolation[]) ?? [],
         });
       } catch (err) {
         cleanup();
@@ -161,4 +181,183 @@ export async function runAxeOnProbe(url: string): Promise<AxeRunSummary> {
         'data:text/html;charset=utf-8,' + encodeURIComponent(buildProbeHtml(url));
     }
   });
+}
+
+const AXE_RULE_CATEGORY: Record<string, { category: string; severity: Severity; wcag: string[]; title: string }> = {
+  'object-alt':            { category: 'image',    severity: 'serious', wcag: ['1.1.1'],          title: '图片缺少 alt 属性' },
+  'area-alt':              { category: 'image',    severity: 'warning', wcag: ['1.1.1'],          title: '图像映射区域缺少 alt 属性' },
+  'image-redundant-alt':   { category: 'image',    severity: 'tip',     wcag: ['1.1.1'],          title: '图片替代文本冗余' },
+  'input-image-alt':       { category: 'image',    severity: 'serious', wcag: ['1.1.1'],          title: '图片提交按钮缺少 alt' },
+  'label':                 { category: 'form',     severity: 'serious', wcag: ['1.3.1', '3.3.2', '4.1.2'], title: '表单控件未关联标签' },
+  'form-field-multiple-labels': { category: 'form', severity: 'warning', wcag: ['3.3.2', '4.1.2'], title: '表单字段标签重复或冲突' },
+  'button-name':           { category: 'form',     severity: 'serious', wcag: ['4.1.2'],          title: '按钮缺少可访问名称' },
+  'input-button-name':     { category: 'form',     severity: 'serious', wcag: ['4.1.2'],          title: 'input[type=button/submit] 缺少名称' },
+  'contrast':              { category: 'color',    severity: 'serious', wcag: ['1.4.3', '1.4.6'], title: '正文文本颜色对比度不足' },
+  'link-in-text-block':    { category: 'color',    severity: 'warning', wcag: ['1.4.1'],          title: '文本内嵌链接缺少视觉区分' },
+  'color-contrast-enhanced': { category: 'color', severity: 'warning', wcag: ['1.4.6'],          title: '大文本对比度不足' },
+  'focus-visible':         { category: 'focus',    severity: 'serious', wcag: ['2.4.3', '2.4.7'], title: '焦点指示器被移除' },
+  'focus-order-semantics': { category: 'focus',    severity: 'warning', wcag: ['2.4.3'],          title: '可见焦点与 DOM 顺序不一致' },
+  'skip-link':             { category: 'focus',    severity: 'tip',     wcag: ['2.4.1'],          title: '缺少跳转到主内容的链接' },
+  'aria-allowed-attr':     { category: 'aria',     severity: 'warning', wcag: ['4.1.2'],          title: 'ARIA 属性使用错误' },
+  'aria-required-attr':    { category: 'aria',     severity: 'serious', wcag: ['4.1.2'],          title: '角色缺少必需的 ARIA 属性' },
+  'aria-roles':            { category: 'aria',     severity: 'warning', wcag: ['4.1.2'],          title: '使用了不存在的 ARIA 角色' },
+  'aria-hidden-focus':     { category: 'aria',     severity: 'serious', wcag: ['2.1.1', '4.1.2'], title: 'aria-hidden 的元素仍可被聚焦' },
+  'aria-valid-attr-value': { category: 'aria',     severity: 'warning', wcag: ['4.1.2'],          title: 'ARIA 属性值无效' },
+  'aria-valid-attr':       { category: 'aria',     severity: 'warning', wcag: ['4.1.2'],          title: '存在无效的 ARIA 属性名' },
+  'heading-order':         { category: 'heading',  severity: 'warning', wcag: ['1.3.1', '2.4.6'], title: '标题层级跳跃' },
+  'empty-heading':         { category: 'heading',  severity: 'tip',     wcag: ['1.3.1', '2.4.6'], title: '空的标题元素' },
+  'page-has-heading-one':  { category: 'heading',  severity: 'tip',     wcag: ['2.4.1'],          title: '页面缺少主标题 h1' },
+  'duplicate-id-active':   { category: 'document', severity: 'warning', wcag: ['4.1.1'],          title: '可交互元素存在重复 ID' },
+  'duplicate-id':          { category: 'document', severity: 'warning', wcag: ['4.1.1'],          title: '重复的 ID 属性' },
+  'html-has-lang':         { category: 'document', severity: 'tip',     wcag: ['3.1.1'],          title: '文档未声明语言' },
+  'html-lang-valid':       { category: 'document', severity: 'tip',     wcag: ['3.1.1'],          title: 'lang 属性值无效' },
+  'meta-viewport':         { category: 'document', severity: 'tip',     wcag: ['1.4.4'],          title: '视口 meta 未设置缩放' },
+  'bypass':                { category: 'focus',    severity: 'tip',     wcag: ['2.4.1'],          title: '无绕过重复内容机制' },
+  'link-name':             { category: 'aria',     severity: 'warning', wcag: ['4.1.2', '2.4.4'], title: '链接缺少可访问名称' },
+  'region':                { category: 'document', severity: 'tip',     wcag: ['1.3.1'],          title: '页面未使用地标区域' },
+};
+
+const WCAG_DB: Record<string, { name: string; level: 'A' | 'AA' | 'AAA'; url: string }> = {
+  '1.1.1': { name: '非文本内容',           level: 'A',   url: 'https://www.w3.org/WAI/WCAG21/Understanding/non-text-content.html' },
+  '1.3.1': { name: '信息与关系',           level: 'A',   url: 'https://www.w3.org/WAI/WCAG21/Understanding/info-and-relationships.html' },
+  '1.4.1': { name: '颜色用途',             level: 'A',   url: 'https://www.w3.org/WAI/WCAG21/Understanding/use-of-color.html' },
+  '1.4.3': { name: '对比（最小）',         level: 'AA',  url: 'https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html' },
+  '1.4.4': { name: '调整文本大小',         level: 'AA',  url: 'https://www.w3.org/WAI/WCAG21/Understanding/resize-text.html' },
+  '1.4.6': { name: '对比（增强）',         level: 'AAA', url: 'https://www.w3.org/WAI/WCAG21/Understanding/contrast-enhanced.html' },
+  '1.4.11':{ name: '非文本对比',           level: 'AA',  url: 'https://www.w3.org/WAI/WCAG21/Understanding/non-text-contrast.html' },
+  '2.1.1': { name: '键盘',                 level: 'A',   url: 'https://www.w3.org/WAI/WCAG21/Understanding/keyboard.html' },
+  '2.4.1': { name: '绕过模块',             level: 'A',   url: 'https://www.w3.org/WAI/WCAG21/Understanding/bypass-blocks.html' },
+  '2.4.3': { name: '焦点顺序',             level: 'A',   url: 'https://www.w3.org/WAI/WCAG21/Understanding/focus-order.html' },
+  '2.4.4': { name: '链接目的（上下文中）', level: 'A',   url: 'https://www.w3.org/WAI/WCAG21/Understanding/link-purpose-in-context.html' },
+  '2.4.6': { name: '标题和标签',           level: 'AA',  url: 'https://www.w3.org/WAI/WCAG21/Understanding/headings-and-labels.html' },
+  '2.4.7': { name: '焦点可见',             level: 'AA',  url: 'https://www.w3.org/WAI/WCAG21/Understanding/focus-visible.html' },
+  '3.1.1': { name: '页面语言',             level: 'A',   url: 'https://www.w3.org/WAI/WCAG21/Understanding/language-of-page.html' },
+  '3.3.2': { name: '标签或说明',           level: 'A',   url: 'https://www.w3.org/WAI/WCAG21/Understanding/labels-or-instructions.html' },
+  '4.1.1': { name: '解析',                 level: 'A',   url: 'https://www.w3.org/WAI/WCAG21/Understanding/parsing.html' },
+  '4.1.2': { name: '名称、角色、值',       level: 'A',   url: 'https://www.w3.org/WAI/WCAG21/Understanding/name-role-value.html' },
+};
+
+function buildWcagRefs(codes: string[]): WcagRef[] {
+  return codes.map((c) => {
+    const db = WCAG_DB[c];
+    return db
+      ? { code: c, name: db.name, level: db.level, url: db.url }
+      : { code: c, name: 'WCAG 准则', level: 'A', url: 'https://www.w3.org/TR/WCAG21/' };
+  });
+}
+
+function buildFixSteps(ruleId: string, description: string): FixSuggestion {
+  const generic = [
+    '对照 axe-core help 文档分析具体违规原因',
+    '定位受影响元素，确认其在页面中的实际用途',
+    '按 WCAG 规范修复，优先使用语义化 HTML 而非 ARIA 补丁',
+    '修复后再次使用 axe-core 验证，确保违规彻底消除',
+  ];
+  const fixMap: Record<string, { steps: string[]; before?: string; after?: string }> = {
+    'object-alt': {
+      steps: ['为所有有意义的 <img> 元素添加 alt 属性，简洁描述图像内容（≤125字符）', '纯装饰图使用 alt="" 并加 role="presentation"', '复杂图表使用 aria-describedby 关联文字说明'],
+      before: '<img src="hero-banner.jpg">',
+      after:  '<img src="hero-banner.jpg" alt="夏季新品促销 5折起">',
+    },
+    'label': {
+      steps: ['为每个 <input>、<select>、<textarea> 关联可见 <label> 元素', '优先使用 label for=id 方式，或用 label 包裹控件', '图标的搜索框等可加 aria-label 替代'],
+      before: '<input type="email" name="email" placeholder="邮箱">',
+      after:  '<label for="em">邮箱</label><input id="em" type="email" name="email">',
+    },
+    'contrast': {
+      steps: ['使用 WebAIM Contrast Checker 测量前景/背景色对比度', '正文文本对比度 ≥ 4.5:1（AA），大文本 ≥ 3:1（AA）', '优先调整背景色或字体颜色，必要时使用阴影描边增强对比'],
+      before: '<p style="color:#9ca3af;background:#f8fafc">低对比度文字</p>',
+      after:  '<p style="color:#334155;background:#f8fafc">标准对比度文字</p>',
+    },
+    'focus-visible': {
+      steps: ['移除 outline: none 或 outline: 0 样式', '为:focus-visible 提供 ≥ 2px 宽度的对比色轮廓', '可用 box-shadow 或 ring 替代浏览器默认 outline'],
+      before: '.btn:focus { outline: none; }',
+      after:  '.btn:focus-visible { outline: 2px solid #0d9488; outline-offset: 2px; }',
+    },
+    'aria-allowed-attr': {
+      steps: ['查阅 https://www.w3.org/WAI/ARIA/apg/ 确认允许使用的 ARIA 属性', '删除不存在的属性名（如 aria-title 应改为 aria-label）', '用原生语义 HTML（<button>/<nav> 等）代替多余 ARIA'],
+      before: '<div aria-title="提交订单">按钮</div>',
+      after:  '<button aria-label="提交订单">提交</button>',
+    },
+    'aria-hidden-focus': {
+      steps: ['对 aria-hidden="true" 的元素加 tabindex="-1" 阻止键盘聚焦', '若元素需要可聚焦则移除 aria-hidden="true"', '装饰性 SVG/图标若用 aria-hidden 需确保不可 Tab 到'],
+      before: '<a href="/old" aria-hidden="true">旧入口</a>',
+      after:  '<a href="/old" aria-hidden="true" tabindex="-1">旧入口</a>',
+    },
+    'heading-order': {
+      steps: ['检查页面标题树，h2→h3→h4 逐级递增不跳级', '视觉上要小一号的标题用 CSS 调整字号而非改 h 级数', '每个区块至少有一个 h2，子标题紧跟父标题'],
+      before: '<section><h2>产品</h2><h4>参数</h4></section>',
+      after:  '<section><h2>产品</h2><h3>参数</h3></section>',
+    },
+    'duplicate-id': {
+      steps: ['全局搜索重复的 id 字符串', '将重复 id 改为 class 或加前缀后缀唯一化', '<label for>、aria-labelledby 同步更新引用 ID'],
+      before: '<input id="x"><input id="x">',
+      after:  '<input id="x-email"><input id="x-name">',
+    },
+    'html-has-lang': {
+      steps: ['在 <html> 根元素添加 lang 属性', '简体中文用 lang="zh-CN"，繁体用 lang="zh-TW"，英文用 lang="en"', '页面内局部语言切换用局部 lang= 覆盖'],
+      before: '<!doctype html><html><head>',
+      after:  '<!doctype html><html lang="zh-CN"><head>',
+    },
+    'skip-link': {
+      steps: ['在 <body> 最顶部添加一个视觉隐藏但可聚焦的"跳到主内容"锚点链接', '主内容区设置 id="main" 作为跳转目标', '链接 :focus 时显示为可见样式'],
+      before: '<body><header>…</header>',
+      after:  '<body><a class="skip" href="#main">跳到主内容</a><header>…</header><main id="main">',
+    },
+  };
+  const preset = fixMap[ruleId];
+  if (preset) {
+    return {
+      steps: [...preset.steps, '修复后重新运行 axe-core 验证'],
+      codeBefore: preset.before,
+      codeAfter: preset.after,
+      resources: ['https://dequeuniversity.com/rules/axe/4.10/' + ruleId],
+    };
+  }
+  return { steps: generic, resources: ['https://dequeuniversity.com/rules/axe/4.10/' + ruleId] };
+}
+
+const IMPACT_TO_SEVERITY: Record<string, Severity> = {
+  critical: 'serious',
+  serious:  'serious',
+  moderate: 'warning',
+  minor:    'tip',
+};
+
+export function mapAxeViolationsToIssues(violations: AxeViolation[]): A11yIssue[] {
+  const issues: A11yIssue[] = [];
+  let seq = 0;
+  for (const v of violations) {
+    const rule = AXE_RULE_CATEGORY[v.id] ?? {
+      category: 'aria',
+      severity: (v.impact ? IMPACT_TO_SEVERITY[v.impact] : undefined) ?? 'warning',
+      wcag: ['4.1.2'],
+      title: v.help,
+    };
+    for (const node of v.nodes) {
+      seq += 1;
+      const selector = node.target?.[0] ?? 'unknown';
+      const element: ElementLocator = {
+        selector,
+        html: (node.html || '').substring(0, 280),
+        xpath: node.xpath?.[0],
+      };
+      const fix = buildFixSteps(v.id, v.description);
+      issues.push({
+        id: `axe-${v.id}-${seq}`,
+        type: v.id,
+        category: rule.category,
+        severity: rule.severity,
+        title: rule.title,
+        description: v.help + '（' + (v.description || '') + '）',
+        impact: node.failureSummary || (rule.severity === 'serious' ? '可能对部分用户造成严重的可访问性障碍。' : '对可访问性有一定影响，建议修复。'),
+        wcagRefs: buildWcagRefs(rule.wcag),
+        element,
+        fixSuggestion: fix,
+      });
+      if (seq >= 16) break;
+    }
+    if (seq >= 16) break;
+  }
+  return issues;
 }
